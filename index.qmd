@@ -1,0 +1,152 @@
+---
+title: "Influenza A H7N9 in China, 2013"
+format: dashboard
+theme: lux
+---
+
+```{r include=FALSE}
+# Load packages 
+if(!require(pacman)) install.packages("pacman")
+pacman::p_load(tidyverse, outbreaks, bslib, bsicons, shiny, 
+               rgeoboundaries, plotly, htmltools, reactable,
+               htmltools, gapminder)
+
+# view data
+head(outbreaks::fluH7N9_china_2013)
+```
+
+# HOME 
+
+## Row 1 Value Boxes {height=20%}
+```{r include=FALSE}
+# Prepare data
+## For Value Boxes
+total_cases<-fluH7N9_china_2013 %>% 
+  summarize(count=n())
+
+number_hospitalizations<-fluH7N9_china_2013 %>% 
+  filter(!is.na(date_of_hospitalisation)) %>% 
+  summarize(count=n())
+
+number_deaths<-fluH7N9_china_2013 %>% 
+  filter(outcome=="Death") %>% 
+  summarize(count=n())
+```
+
+```{r}
+value_box(
+  title = "Total Cases",
+  value = total_cases,
+  showcase = bsicons::bs_icon("virus"),
+  theme = value_box_theme(bg = "#508FD6")
+)
+```
+
+```{r}
+value_box(
+  title = "Total Hospitalizations",
+  value = number_hospitalizations,
+  showcase = bsicons::bs_icon("hospital"),
+  theme = value_box_theme(bg = "#214671", fg="white") 
+)
+```
+
+```{r}
+value_box(
+  title = "Total Deaths",
+  value = number_deaths,
+  showcase = bsicons::bs_icon("file-medical"),
+  theme = value_box_theme(bg = "#4071AB", fg="white") 
+)
+```
+
+## Row 2 Data Visualization {height=80%}
+
+### Column 1 {width=35%}
+```{r include=FALSE}
+## Prepare data for plot "Cases by province"
+cases_by_province <- fluH7N9_china_2013 %>% 
+  group_by(province) %>% 
+  summarize(number_cases=n()) %>% 
+    mutate(tooltip_label = paste(province, 
+                               number_cases, 
+                               sep = ": "))
+
+plot_cases_province<-
+    ggplot(cases_by_province,
+           aes(y = reorder(province, number_cases), 
+             x = number_cases,
+             text = tooltip_label))+
+           geom_col(fill="#4882B5")+
+      theme_minimal()+
+  labs(x="Number of cases", y="")
+
+ggplotly_cases_province<- ggplotly(plot_cases_province, tooltip = "text")
+```
+
+```{r title="Number of Cases by Province"}
+ggplotly_cases_province
+```
+
+### Column 2 {width=65%}
+```{r include=FALSE}
+## Prepare data for map
+### MAP OF CASES PER PROVINCE
+china_map <- rgeoboundaries::gb_adm1("china")
+
+# Check the keys to see if join will be successful
+setdiff(cases_by_province$province, china_map$shapeName)
+setdiff(china_map$shapeName, cases_by_province$province)
+# Some work to be done to harmonize these
+
+china_map <- china_map %>%
+  # Remove the strings Province, Municipality and Autonomous Region 
+  # to allow matching
+  mutate(province = str_trim(
+    str_remove(shapeName, "Province|Municipality|Autonomous Region")
+  ))
+
+# Check if join will work fine
+setdiff(cases_by_province$province, china_map$province)
+
+# Fix Guangdong, which based on a quick Google is actually Guangzhou
+china_map <- china_map %>% 
+  mutate(province = if_else(province == "Guangzhou", "Guangdong", province)) 
+  
+# Check again
+setdiff(cases_by_province$province, china_map$province)
+
+# Now join
+china_map_joined <- 
+  left_join(china_map, cases_by_province, by = "province") %>% 
+  # Create tooltip label 
+  mutate(tooltip_label = paste0(province, ": ", number_cases))
+
+china_map_plot <- ggplot(china_map_joined) +
+  geom_sf(aes(fill = number_cases, text = tooltip_label)) + 
+  theme_void() +
+  labs(fill = "Number of Cases") + 
+  theme(legend.position = "none")
+
+china_map_plot_ggplotly <- 
+  ggplotly(china_map_plot, tooltip = "text")
+```
+
+```{r title="Map of Provinces by Number of Cases"}
+china_map_plot_ggplotly
+```
+# DOWNLOAD DATA
+
+```{r}
+htmltools::browsable(
+  tagList(
+    reactable(fluH7N9_china_2013, 
+              
+              searchable = T, 
+              filterable = T), 
+    
+tags$button("Download as CSV", 
+            onclick = "Reactable.downloadDataCSV('gapminder-table')")
+  )
+)
+```
