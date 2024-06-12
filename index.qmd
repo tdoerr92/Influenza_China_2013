@@ -7,6 +7,7 @@ theme: lux
 ```{r include=FALSE}
 # Load packages 
 if(!require(pacman)) install.packages("pacman")
+
 pacman::p_load(tidyverse, outbreaks, bslib, bsicons, shiny, 
                rgeoboundaries, plotly, htmltools, reactable,
                htmltools, gapminder)
